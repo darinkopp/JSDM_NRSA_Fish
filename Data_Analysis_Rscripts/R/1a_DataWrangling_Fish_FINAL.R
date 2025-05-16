@@ -206,7 +206,10 @@ saveRDS(result, "Data/NRSAFish_Tree_Complete.rds")
 #########
 beta_iv = FishBase_and_Morphometrics$beta_gv[FishBase_and_Morphometrics$g_i,]
 a <- archetypes(beta_iv, 3)
-OPE <- setNames(data.frame(a$alphas, species = rownames(beta_iv)), c("O","P","E", "species"))
+OPE <- setNames(data.frame(a$alphas, 
+                           species = rownames(beta_iv)), 
+                c("O","P","E", "species"))
+OPE <- data.frame(beta_iv, OPE)
 OPE$genus <- unlist(lapply(strsplit(OPE$species, " "), "[[",1))
 OPE <- OPE[!duplicated(OPE$species),]
 
@@ -214,6 +217,7 @@ OPE <- OPE[!duplicated(OPE$species),]
 SpeciesList <- unique(Fish_cnt_Full$FName)
 traits <- OPE[OPE$species%in%SpeciesList,]
 
+names(traits)
 
 # taxa that did not have a matching record
  add_taxa <- Fish_cnt_Full %>%
@@ -224,23 +228,23 @@ traits <- OPE[OPE$species%in%SpeciesList,]
   
   genMean <- sapply(unique(add_taxa$genus), 
                   simplify = F, function(x) 
-                    colMeans(OPE[OPE$genus==x,
-                                 c("O", "P", "E")]))
+                    colMeans(OPE[OPE$genus == x, -c(which(colnames(OPE)%in%c("species","genus")))]))
+  
   genMean <- do.call(rbind, genMean)
 
   add_taxa <- merge(add_taxa, genMean, by.x = "genus", by.y = 0)
 
   # there was a name change in 
-  add_taxa[add_taxa$FName == "Pantosteus lahontan", c("O", "P", "E")] <-
-    OPE[OPE$species == "Catostomus platyrhynchus", c("O", "P", "E")]
-  add_taxa[add_taxa$FName == "Snyderichthys copei", c("O", "P", "E")] <-
-    OPE[OPE$FName == "Lepidomeda copei", c("O", "P", "E")]
+  add_taxa[add_taxa$FName == "Pantosteus lahontan", !colnames(add_taxa) %in% c("FName","species","genus")] <-
+    OPE[OPE$species == "Catostomus platyrhynchus", !colnames(add_taxa) %in% c("FName","species","genus")]
+  add_taxa[add_taxa$FName == "Snyderichthys copei", !colnames(add_taxa) %in% c("FName","species","genus")] <-
+    OPE[OPE$species == "Lepidomeda copei", !colnames(add_taxa) %in% c("FName","species","genus")]
   names(add_taxa)[2]<-"species"
 ##############################
 
 traits <- rbind(traits, add_taxa)
 
-write.csv(traits, "Data/NRSAFish_Traits_Complete.csv")
+write.csv(traits, "Data/NRSAFish_Traits.csv", row.names = F)
 
 
 ################################################################################
