@@ -27,7 +27,7 @@ library(reshape2)# reshaping data into matrix
 library(lubridate)# working with dates
 library("FishLife") # traits data 
 library("archetypes") # trait archetypes
-
+library(readxl)
 
 # copy data from NARS IM
 #########
@@ -87,7 +87,7 @@ taxonomy$NRSA_SppName <- unlist(lapply(x, function(i) paste(i[1], i[2])))
 
 ########
 # database downloaded from package GitHub page 
-FishBase <- read.xlsx("Data_Raw/Fishes_FishBase_database.xlsx")
+FishBase <- read.xlsx("Data/Fishes_FishBase_database.xlsx")
 matchName_Fishbase <- nameMatch(spList = taxonomy$NRSA_SppName, spSource = FishBase)
 #matchName_Fishbase[matchName_Fishbase$Fuzzy,]
 
@@ -178,7 +178,7 @@ Fish_cnt_Full <- merge(taxonomy[,c("TAXA_ID", "FName")], Fish_cnt, by = "TAXA_ID
 # check taxa that were collected by NRSA but not included in the analysis. These are taxa 
 # that were either hybrids or ambiguous (e.g. UNKNOWN GENERA) 
 removedTaxa <- names(sort(table(Fish_cnt[!Fish_cnt$TAXA_ID %in% taxonomy$TAXA_ID, "TAXA_ID"])))
-taxonomy_check <- read.table("Data_Raw/allNRSA_FishTaxa.tab", sep ="\t", header = T)
+taxonomy_check <- read.table("Data/alltheNRSA_fish_taxa.tab", sep ="\t", header = T)
 taxonomy_check[taxonomy_check$TAXA_ID %in% removedTaxa,c("FINAL_NAME", "GENUS", "SPECIES")]
 
 

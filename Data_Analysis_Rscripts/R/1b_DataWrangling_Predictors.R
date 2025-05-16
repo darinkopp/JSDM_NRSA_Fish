@@ -1,6 +1,4 @@
 # Harmonizing NRSA Chemical and Physical Habitat Data 
-# data downloaded directly from website or NARS IM. 
-# Script creates "Data_Raw/NRSA_ChemPhab.csv"
 
 rm(list = ls())
 gc()
@@ -12,72 +10,102 @@ library(tidyverse)
 library(parallel)
 library(nhdplusTools)
 library(remotes)
-
-
 library(StreamCatTools)
 
 #copy predictor tables
 #############
-# chemical
-file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809_WaterChem_SuperWide_alltheNRSA.tab",
-          paste0(getwd(),"/Data/NRSA0809_WaterChem_SuperWide_alltheNRSA.tab"))
-file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA1314_WaterChem_SuperWide_alltheNRSA.tab",
-          paste0(getwd(),"/Data/NRSA1314_WaterChem_SuperWide_alltheNRSA.tab"))
-file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA1819_WaterChem_SuperWide_alltheNRSA.tab",
-          paste0(getwd(),"/Data/NRSA1819_WaterChem_SuperWide_alltheNRSA.tab"))
-
-# copy physical habitat
-file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809-1819_PhabMetrics_alltheNRSA.tab",
-          paste0(getwd(),"/Data/NRSA0809-1819_PhabMetrics_alltheNRSA.tab"))
-
-#copy landscape metrics
-file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809-1819_landMets_alltheNRSA.tab",
-          paste0(getwd(),"/Data/NRSA0809-1819_landMets_alltheNRSA.tab"))
+# # chemical
+# file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809_WaterChem_SuperWide_alltheNRSA.tab",
+#           paste0(getwd(),"/Data/NRSA0809_WaterChem_SuperWide_alltheNRSA.tab"))
+# file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA1314_WaterChem_SuperWide_alltheNRSA.tab",
+#           paste0(getwd(),"/Data/NRSA1314_WaterChem_SuperWide_alltheNRSA.tab"))
+# file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA1819_WaterChem_SuperWide_alltheNRSA.tab",
+#           paste0(getwd(),"/Data/NRSA1819_WaterChem_SuperWide_alltheNRSA.tab"))
+# 
+# # copy physical habitat
+# file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809-1819_PhabMetrics_alltheNRSA.tab",
+#           paste0(getwd(),"/Data/NRSA0809-1819_PhabMetrics_alltheNRSA.tab"))
+# 
+# #copy landscape metrics
+# file.copy("O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/NRSA0809-1819_landMets_alltheNRSA.tab",
+#           paste0(getwd(),"/Data/NRSA0809-1819_landMets_alltheNRSA.tab"))
 ######################################
 
-FishUID <- read.csv("Data/NRSAFish_Counts_AllYears_Complete.csv") %>%
+# occurrence 
+FishUID <- read.csv("Data/NRSAFish_Ocurrence.csv") %>%
   select(UID) %>%
   distinct()
 
-#Prepare Site data file - Include survey cycle and vpu 
-#####
-vpus <- nhdplusTools::get_boundaries(type = "vpu")
-
-#siteinfo files 
+# siteinfo files 
+#########
 siteinfo <- paste0("Data/NRSA0809-1819_siteinfo.tab")|>
   read.table(sep = "\t", header = T)|>
-  mutate(HAS_FISH = ifelse(UID%in%FishUID$UID,"Y","N"))|>
-  mutate(YEAR = substring(DATE_COL, nchar(DATE_COL)-3, nchar(DATE_COL)))|>
-  mutate(CYCLE = ifelse(YEAR %in% c(2008, 2009), "0809", 
-                        ifelse(YEAR %in% c(2013, 2014), 
-                               "1314", "1819")))|> 
-  st_as_sf(coords = c("LON_DD83", "LAT_DD83"), crs = 4269) |>
-  st_join(vpus, join = st_within)%>%
-  mutate(LON_DD83 = st_coordinates(.)[,1],
-         LAT_DD83 = st_coordinates(.)[,2])|>
-  st_set_geometry(NULL)|>
-  mutate(vpu_use = VPUID)
-
-
-#Combine VPUs
+  mutate(vpu_use = substring(HUC2,2), 
+         YEAR = substring(DATE_COL,7))
+  
+# Combine VPUs
 siteinfo$vpu_use[siteinfo$vpu_use == "14"] <- "15"
 siteinfo$vpu_use[siteinfo$vpu_use %in% c("03N", "03S", "03W")] <- "03"
 siteinfo$vpu_use[siteinfo$vpu_use %in% c("07", "08")] <- "08"
 siteinfo$vpu_use[siteinfo$vpu_use %in% c("05", "06")] <- "05"
-# this point had funky coordinates but has a comid and fish data (?)
-siteinfo[is.na(siteinfo$vpu_use),"vpu_use"]<-
-  substring(siteinfo[is.na(siteinfo$vpu_use),"HUC2"],2)
-####################################
 
-#write_site data... The has fish column will allow you to used weights
-#this table might change because i want to add the data availability 
-#lots of Phab Missing? 
-write.csv(siteinfo, "Data/NRSAFish_Sites.csv", row.names = F)
+siteinfo <- siteinfo%>%
+  select("UNIQUE_ID", "UID", 
+         "SITE_ID","VISIT_NO",
+         "LAT_DD83", "LON_DD83",
+         "DATE_COL",
+         "DSGN_CYCLE", "AG_ECO9",
+         "COMID","HUC2", "WGT_CAT",
+         "WGT_TP", "vpu_use", "YEAR")
+
+####################################
+anyDuplicated(siteinfo[,c("SITE_ID","VISIT_NO","YEAR")])
+
+###############################################################################
+# Methods data obtained from
+# L:\Priv\CORFiles\IM-TH007\data\im\nrsaYYYY\raw. From these tables, selected the 
+# the protocol used to sample fish "FISH_PROTOCOL", and whether a site was 
+# sampled sufficiently "SAMPLED_FISH". This analysis focus on fish collected by 
+# electrofishing (majority of the sites) and sampled sufficiently to accurately 
+# capture the fish diversity at the site
+################################################################################
+
+Fish.Method <- data.frame()
+#######
+# 0809 
+methods <- read.table("Data/fishinfo_wide_0809.tab", sep = "\t", header= T)
+methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
+Fish.Method <- rbind(Fish.Method, methods)
+
+# 1314
+methods <- read.table("Data/wide_fishinfo_1314.tab", sep = "\t", header= T)
+methods$YEAR <- substring(methods$DATE_COL, nchar(methods$DATE_COL)-3, nchar(methods$DATE_COL))
+methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
+Fish.Method <- rbind(Fish.Method, methods)
+
+# 1819
+methods <- read.table("Data/nrsa1819_fishinfoWide_newUid.tab", sep = "\t", header= T)
+methods$YEAR <- substring(methods$DATE_COL, nchar(methods$DATE_COL)-3, nchar(methods$DATE_COL))
+methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
+Fish.Method <- rbind(Fish.Method, methods)
+
+#make protocol names consistent across surveys Wadeable Sites
+unique(Fish.Method[, c("FISH_PROTOCOL")]) 
+Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("WADE", "WADEABLE")] <- "SM_WADEABLE"
+Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("SM_NONWADEABLE")] <- "SM_NONWADEABLE"
+Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("LGWADE")] <- "LG_WADEABLE"
+Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("BOATABLE","BOAT")] <- "LG_NONWADEABLE"
+#####################################
+anyDuplicated(Fish.Method[,c("SITE_ID", "VISIT_NO", "YEAR")])
+
+# merge siteinfo to the fish methods
+EnvData <- merge(siteinfo,Fish.Method,by = c("SITE_ID", "VISIT_NO", "YEAR"), all.x=T)
+
 ################################################################################
 # Prepare water quality
 ################################################################################
 
-#####
+#########
 # units from NRSA site metadata
 # Specific Conductance	uS/cm; 
 # Sulfate	CHEMW	mg/L; 
@@ -99,145 +127,93 @@ ChemVarNames <- c("UID",
 
 WQ_0809 <-"Data/NRSA0809_WaterChem_SuperWide_alltheNRSA.tab"|>
   read.table(sep = "\t", header = T)|>
-  filter(UID%in%FishUID$UID)|>
   dplyr::select(all_of(ChemVarNames))
 
 WQ_1314 <-"Data/NRSA1314_WaterChem_SuperWide_alltheNRSA.tab"|>
   read.table(sep = "\t", header = T)|>
-  filter(UID%in%FishUID$UID)|>
   dplyr::select(all_of(ChemVarNames))
 
 WQ_1819 <- "Data/NRSA1819_WaterChem_SuperWide_alltheNRSA.tab"|>
   read.table(sep = "\t", header = T)|>
-  filter(UID%in%FishUID$UID)|>
   dplyr::select(all_of(ChemVarNames))
 ####################################
 chem <- do.call(rbind, list(WQ_0809, WQ_1314, WQ_1819))
 
-siteinfo$HAS_CHEM <- ifelse(siteinfo$UID %in% chem$UID,"Y","N")
-
-
 # check Units
 # apply(chem[,grep("UNITS", names(chem), value = T)], 2, unique)
+chem <- chem[,c("UID", grep("RESULT", names(chem), value = T))]
 
 ################################################################################        
 # Prepare physical habitat
 ################################################################################
 
-# general Phab data
+# general fish cover data
 #####
-# LSUB_DMM Log10(Dgm–Geometric Mean Bed Surface Particle Diameter–mm);
-# PCT_SA Sand – .06-2 mm (%); 
-# PCT_FN Bed Surface % Fines <0.06mm; 
-# "LDCBF_G08"	"SUBSTRATE CHARACTERIZATION"	"Log10(Streambed Critical Diameter-at Bankfull -- mm)(PRK 2008)"
-# "W1_HAG"	"HUMAN DISTURBANCE"	"Human Agricultural Influence Index(distance-wtd tally of types and presence"	
-# "W1_HALL"	"HUMAN DISTURBANCE"	"Human Disturbance Index(distance-wtd tally of types and presence"
-# "W1_HNOAG"	"HUMAN DISTURBANCE"	"Human Non-Agricultural Disturbance Index (distance weighted tally of types and presence)"
-# "PCT_FAST"	"CHANNEL HABITAT"	"Percent Fast Water Habitat"
-# "PCT_POOL"	"CHANNEL HABITAT"	"Pools -- All Types (% of reach)"
-# "XWIDTH"	"CHANNEL MORPHOLOGY"	"Mean Wetted Width (m)"	"Mean Wetted Width (m)"
-# "XDEPTH_CM"	"INTERPRETATION"	"Mean thalweg depth (cm)
-# "XFC_NAT"	"FISH COVER"	"Sum of non-anthropogenic fish areal cover types"
-# "XCMGW"	"RIPARIAN VEGETATION"	"Sum of Woody Canopy+Mid+Ground layer areal cover proportion"	
+# Natural Fish Cover Features
+c("PFC_ALG", "PFC_AQM", "PFC_BRS", 
+  "PFC_LWD", "PFC_LVT", "PFC_OHV", 
+  "PFC_RCK", "PFC_UCB")
 
-phabVars <- c("UID", "LSUB_DMM", "PCT_SA", "PCT_FN", 
-              "LDCBF_G08","W1_HAG","W1_HALL",
-              "PCT_FAST", "PCT_POOL","XWIDTH","XDEPTH_CM",
-              "XFC_NAT","XCMGW")
-
-PHAB <- "Data/NRSA0809-1819_PhabMetrics_alltheNRSA.tab"|>
+# Depth heterogenity
+fishHab <- "Data/NRSA0809-1819_PhabMetrics_alltheNRSA.tab"|>
   read.table(sep = "\t", header = T)|>
-  filter(UID%in%FishUID$UID)|>
-  select(phabVars)
+  select(c("UID", 
+           "PFC_ALG", "PFC_AQM", 
+           "PFC_BRS", "PFC_LWD", 
+           "PFC_LVT", "PFC_OHV", 
+           "PFC_RCK", "PFC_UCB",
+           "XCMGW", "RPVDEP"))
+fishHab$FCR <- apply(fishHab[,c(2:9)], 1, function(x) sum(x>0))
   
-apply(PHAB, 2, function(s) sum(is.na(s)))
+apply(fishHab, 2, function(s) sum(is.na(s)))
 
-# Nonsensical value for LDCBF, change to NA
-phab0809 <- read.csv("Data_Raw/NRSA_0809/phabmed.csv", na.strings="", stringsAsFactors = F) %>% 
-  mutate(LDCBF_G08 = ifelse(LDCBF_G08 == "#NAME?", NA, LDCBF_G08))%>%
-  dplyr::select(c("UID", "LSUB_DMM", "PCT_SA", "PCT_FN", "LRBS_G08", "LDCBF_G08",
-           "W1_HALL", "W1_HAG", "W1_HNOAG", "XCMGW", "XFC_NAT", "XDEPTH_CM",
-           "XWIDTH", "RPXDEP_CM", "PCT_POOL", "PCT_FAST"))%>%
-  mutate(LDCBF_G08 = as.numeric(LDCBF_G08))
-
-phab1314 <- read.csv("Data_Raw/NRSA_1314/nrsa1314_phabmed_04232019.csv")%>%
-  dplyr::select(c("UID", "LSUB_DMM", "PCT_SA", "PCT_FN", "LRBS_G08", "LDCBF_G08",
-                "W1_HALL", "W1_HAG", "W1_HNOAG", "XCMGW", "XFC_NAT", "XDEPTH_CM",
-                "XWIDTH", "RPXDEP_CM", "PCT_POOL", "PCT_FAST"))
-
-phab1819 <- read.csv("Data_Raw/NRSA_1819/nrsa_1819_physical_habitat_larger_set_of_metrics_-_data.csv")%>%
-  dplyr::select(c("UID", "LSUB_DMM", "PCT_SA", "PCT_FN", "LRBS_G08", "LDCBF_G08",
-           "W1_HALL", "W1_HAG", "W1_HNOAG", "XCMGW", "XFC_NAT", "XDEPTH_CM",
-           "XWIDTH", "RPXDEP_CM", "PCT_POOL", "PCT_FAST"))
-
-phab <- rbind(phab1819, phab1314, phab0809)
-#####################################
-NRSA_ChemPhab <- Reduce(function(x,y) merge(x,y,by = "UID", all.x = T), 
-                        list(siteinfo, chem, phab))
-
-# add "LQLow_cl" data provided by PRK
-######
-phab1 <- read.csv("Data_Raw/Darin_OE1819.csv", header = T)
-phab2 <- read.csv("Data_Raw/Darin_OE8934.csv", header = T)
-phab_LQLow <- rbind(phab2[,intersect(names(phab2),names(phab1))],
-              phab1[,intersect(names(phab2),names(phab1))])%>%
-  dplyr::select(c("SITE_ID", "VISIT_NO", "YEAR", "LQLow_cl")) %>%
-  distinct() #removes duplicated record, phab[phab$SITE_ID=="MORM-1002",]
-##################################### 
-NRSA_ChemPhab <- merge(NRSA_ChemPhab, phab_LQLow, 
-                       all.x = T, 
-                       by = c("SITE_ID", "VISIT_NO", "YEAR"))
-
-#add calculated habitat complexity 
-######
-#vars for habitat complexity
-pfc.vars <- c("PFC_ALG","PFC_AQM",
-              "PFC_BRS","PFC_LWD",
-              "PFC_LVT","PFC_OHV",
-              "PFC_RCK","PFC_UCB",
-              "PFC_HUM") 
-
-pfc <- read.csv("Data_Raw/NRSA2008-2019_Fish_Cover_PhabMetrics.csv")
-pfc <- acast(UID ~ PARAMETER, data = pfc, value.var = "RESULT")
-
-# calculations provided by PK - sum of mean proportion of each cover type across 11 transects 
-SumAll_PFC = with(data.frame(pfc), PFC_ALG + PFC_AQM + PFC_BRS + PFC_LWD + PFC_LVT + PFC_OHV + PFC_RCK + PFC_UCB + PFC_HUM);                                    
-SumAll_noAlgAQM = with(data.frame(pfc), PFC_BRS + PFC_LWD + PFC_LVT + PFC_OHV + PFC_RCK + PFC_UCB + PFC_HUM)                                                 
-SumNat_PFC= with(data.frame(pfc), PFC_ALG + PFC_AQM + PFC_BRS + PFC_LWD + PFC_LVT + PFC_OHV + PFC_RCK + PFC_UCB)                                              
-SumBig_PFC= with(data.frame(pfc), PFC_LWD + PFC_BRS + PFC_LVT + PFC_RCK + PFC_OHV + PFC_UCB)                                                                  
-
-#create PA
-pfc[pfc > 0] <- 1
-
-BetaPFC_ALL = with(data.frame(pfc), PFC_ALG + PFC_AQM + PFC_BRS + PFC_LWD+ PFC_LVT+ PFC_OHV+ PFC_RCK+ PFC_UCB+ PFC_HUM)       
-BetaPFC_ALL_noAlgAqm = with(data.frame(pfc),PFC_BRS+ PFC_LWD+ PFC_LVT+ PFC_OHV+ PFC_RCK+ PFC_UCB+ PFC_HUM)                       
-BetaPFC_NAT_w_AlgAqm = with(data.frame(pfc),PFC_ALG+ PFC_AQM+ PFC_BRS+ PFC_LWD+ PFC_LVT+ PFC_OHV+ PFC_RCK+ PFC_UCB)          
-BetaPFC_NAT_no_Alg =   with(data.frame(pfc),PFC_AQM+ PFC_BRS+ PFC_LWD+ PFC_LVT+ PFC_OHV+ PFC_RCK+ PFC_UCB)                       
-BetaPFC_BIG = with(data.frame(pfc),PFC_LWD + PFC_BRS + PFC_LVT + PFC_RCK + PFC_OHV + PFC_UCB)                                         
-
-AlfaXBetaPFC_ALL = SumAll_PFC * BetaPFC_ALL;                                                                                                
-AlfaXBetaPFC_NAT = SumNat_PFC * BetaPFC_NAT_w_AlgAqm;                                                                                       
-
-pfc <- data.frame(UID = rownames(pfc),
-                  AlfaXBetaPFC_ALL,
-                  AlfaXBetaPFC_NAT, 
-                  SumAll_PFC,
-                  SumAll_noAlgAQM,
-                  BetaPFC_ALL,
-                  BetaPFC_ALL_noAlgAqm)
-##############################
-NRSA_ChemPhab <- merge(NRSA_ChemPhab, pfc, by = "UID", all.x=T)
-
+############################
+fishHab
 
 ################################################################################
-# Prepare GIS
+# Prepare GIS: Area, Temp, Precip
 ################################################################################
 
+lsVars <- "Data/NRSA0809-1819_landMets_alltheNRSA.tab"|>
+  read.table(sep = "\t", header = T)
+  
+out <- data.frame()
+for (i in siteinfo$UID){
+  #i<-siteinfo$UID[1]
+  
+  siy <- siteinfo[siteinfo$UID==i,c("UNIQUE_ID","SITE_ID","YEAR")]
+  
+  tmp <- lsVars %>%
+    filter(UNIQUE_ID == siy$UNIQUE_ID & SITE_ID == siy$SITE_ID)%>%
+    mutate(YEAR = siy$YEAR)%>%
+    select(c("UNIQUE_ID", "WSAREASQKM",
+             paste0("TMEAN_S_", siy$YEAR,"WS"),
+             paste0("PSUMPY_", siy$YEAR,"WS"), "YEAR"))%>%
+    rename_with(~c("UNIQUE_ID","WSAREASQKM","TMEAN_S","PSUMPY", "YEAR"))
+  out <- rbind(out,tmp)         
+}
+Landscape <- unique(out)
+################################
+anyDuplicated(Landscape[,c("UNIQUE_ID", "YEAR")])
+
+# merge data sets together
+EnvData <- Reduce(function(x,y) merge(x, y, by = "UID", all.x = TRUE), list(EnvData, chem, fishHab))
+EnvData <- merge(EnvData,Landscape, by = c("UNIQUE_ID", "YEAR"), all.x =T)
+
+nrow(EnvData)
+nrow(siteinfo)
+
+# Write dataset 
+write.csv(EnvData, "Data/NRSAFish_Environment.csv", row.names = F)
+
+
+###############################################################################
+# extras to extract additional GIS variables
+###############################################################################
 library(dataRetrieval)
 NRSA_GIS <- NRSA_ChemPhab |>
   dplyr::select(all_of(c("UID", "LAT_DD83", "LON_DD83", 
                          "VPUID", "CYCLE","COMID")))
-
 
 # Assign streamcat variables initial list
 ###########
@@ -359,59 +335,4 @@ NRSA_ChemPhab <- merge(NRSA_ChemPhab,
                        NRSA_GIS, by = "UID", 
                        all.x = T)
 
-################################################################################
-# Methods data obtained from
-# L:\Priv\CORFiles\IM-TH007\data\im\nrsaYYYY\raw. From these tables, selected the 
-# the protocol used to sample fish "FISH_PROTOCOL", and whether a site was 
-# sampled sufficiently "SAMPLED_FISH". This analysis focus on fish collected by 
-# electrofishing (majority of the sites) and sampled sufficiently to accurately 
-# capture the fish diversity at the site
-################################################################################
-
-Fish.Method <- data.frame()
-#######
-# 0809 
-methods <- read.table("Data_Raw/fishinfo_wide_0809.tab", sep = "\t", header= T)
-methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
-Fish.Method <- rbind(Fish.Method, methods)
-
-# 1314
-methods <- read.table("Data_Raw/wide_fishinfo_1314.tab", sep = "\t", header= T)
-methods$YEAR <- substring(methods$DATE_COL, nchar(methods$DATE_COL)-3, nchar(methods$DATE_COL))
-methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
-Fish.Method <- rbind(Fish.Method, methods)
-
-# 1819
-methods <- read.table("Data_Raw/nrsa1819_fishinfoWide_newUid.tab", sep = "\t", header= T)
-methods$YEAR <- substring(methods$DATE_COL, nchar(methods$DATE_COL)-3, nchar(methods$DATE_COL))
-methods <- methods[,c("SITE_ID", "VISIT_NO", "YEAR", "FISH_PROTOCOL", "SAMPLED_FISH")]
-Fish.Method <- rbind(Fish.Method, methods)
-
-#make protocol names consistent across surveys Wadeable Sites
-unique(Fish.Method[, c("FISH_PROTOCOL")]) 
-Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("WADE", "SM_NONWADEABLE", "WADEABLE")] <- "SM_WADEABLE"
-Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("LGWADE")] <- "LG_WADEABLE"
-Fish.Method$FISH_PROTOCOL[Fish.Method$FISH_PROTOCOL %in% c("BOATABLE","BOAT")] <- "LG_NONWADEABLE"
-#####################################
-
-NRSA_ChemPhab <- merge(NRSA_ChemPhab, Fish.Method, 
-                       by = c("SITE_ID", "VISIT_NO", "YEAR"), 
-                       all.x = T)
-
-# Write dataset 
-write.csv(NRSA_ChemPhab, "CleanData/NRSA_ChemPhabGIS_TEST.csv", row.names = F)
-
-library(tidyverse)
-allTheNRSA <- "O:/PRIV/CPHEA/PESD/COR/CORFILES/IM-TH007/data/im/allTheNRSA/data/tabfiles/"
-allTheNRSA_Fishcts <- paste0(allTheNRSA, "NRSA0809-1819_fishCts_alltheNRSA.tab") %>%
-  read.table(sep = "\t", header = T)
-names(allTheNRSA_Fishcts)
-a<-reshape2::acast(UID~TAXA_ID,data=allTheNRSA_Fishcts, value.var = "TOTAL", fill = 0)
-TOTAL=data.frame(UID = rownames(a), TOTAL = rowSums(a))
-
-z<-read.csv("CleanData/NRSA_ChemPhabGIS.csv")
-z<-merge(z,TOTAL,by="UID")
-unique(z$YEAR)
-z2<-unique(z[z$YEAR%in%c(2018,2019), c("YEAR","SAMPLED_FISH")])
-z2[order(z2$TOTAL),]
-table(z[,c("SAMPLED_FISH", "FISH_PROTOCOL")])
+#
